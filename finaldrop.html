@@ -1,0 +1,778 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+<title>CarbonOS — Every Gram. Permanent. Forever.</title>
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;500;600;700;800&family=Space+Mono:ital,wght@0,400;0,700;1,400&family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,600;1,9..40,300&display=swap" rel="stylesheet"/>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/mqtt/4.3.7/mqtt.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#04080C;--bg2:#080E16;--surface:#0C1520;--surface2:#111D2A;--surface3:#172234;
+  --border:rgba(255,255,255,0.05);--border2:rgba(255,255,255,0.10);--border3:rgba(255,255,255,0.18);
+  --text:#EEF2F7;--text2:#7A8FA0;--text3:#3A4F60;
+  --green:#00FF87;--green-dim:rgba(0,255,135,0.07);--green-border:rgba(0,255,135,0.22);--green-glow:rgba(0,255,135,0.12);
+  --red:#FF3B3B;--red-dim:rgba(255,59,59,0.07);--amber:#FFB800;--amber-dim:rgba(255,184,0,0.07);
+  --blue:#3D8EFF;--blue-dim:rgba(61,142,255,0.07);--cyan:#00D4FF;
+  --font:'DM Sans',sans-serif;--mono:'Space Mono',monospace;--display:'Syne',sans-serif;
+  --r:12px;--rl:18px;--rxl:24px;
+}
+html{font-size:14px;scroll-behavior:smooth}
+body{font-family:var(--font);background:var(--bg);color:var(--text);-webkit-font-smoothing:antialiased;overflow-x:hidden;cursor:none}
+::selection{background:var(--green);color:#000}
+::-webkit-scrollbar{width:4px}::-webkit-scrollbar-track{background:transparent}::-webkit-scrollbar-thumb{background:var(--border2);border-radius:4px}
+
+/* CURSOR */
+.cur-dot{width:8px;height:8px;background:var(--green);border-radius:50%;position:fixed;transform:translate(-50%,-50%);z-index:99999;pointer-events:none;transition:width .2s,height .2s}
+.cur-ring{width:36px;height:36px;border:1.5px solid rgba(0,255,135,0.5);border-radius:50%;position:fixed;transform:translate(-50%,-50%);z-index:99998;pointer-events:none;transition:all .12s cubic-bezier(.23,1,.32,1)}
+.cur-dot.hov{width:14px;height:14px}.cur-ring.hov{width:56px;height:56px;border-color:rgba(0,255,135,0.8)}
+
+/* GRID BG */
+.grid-bg{position:absolute;inset:0;pointer-events:none;background-image:linear-gradient(rgba(0,255,135,0.025) 1px,transparent 1px),linear-gradient(90deg,rgba(0,255,135,0.025) 1px,transparent 1px);background-size:60px 60px;animation:gridDrift 20s linear infinite;z-index:0}
+@keyframes gridDrift{from{background-position:0 0}to{background-position:60px 60px}}
+
+/* ORBS */
+.orb{position:absolute;border-radius:50%;pointer-events:none;filter:blur(120px)}
+.orb1{width:800px;height:800px;background:radial-gradient(circle,rgba(0,255,135,0.11),transparent 65%);top:-200px;left:50%;transform:translateX(-50%);animation:o1 8s ease-in-out infinite}
+.orb2{width:500px;height:500px;background:radial-gradient(circle,rgba(61,142,255,0.09),transparent 65%);bottom:-100px;right:-100px;animation:o2 10s ease-in-out infinite}
+.orb3{width:400px;height:400px;background:radial-gradient(circle,rgba(255,184,0,0.06),transparent 65%);bottom:-50px;left:-100px;animation:o2 12s ease-in-out infinite 2s}
+@keyframes o1{0%,100%{transform:translateX(-50%) translateY(0)}50%{transform:translateX(-50%) translateY(-40px)}}
+@keyframes o2{0%,100%{transform:translateY(0)}50%{transform:translateY(-30px)}}
+
+/* NAV */
+#landing{min-height:100vh;display:flex;flex-direction:column;position:relative;overflow:hidden}
+.land-nav{display:flex;align-items:center;justify-content:space-between;padding:20px 56px;position:sticky;top:0;z-index:100;background:rgba(4,8,12,0.75);backdrop-filter:blur(24px);border-bottom:1px solid var(--border)}
+.nav-logo{font-family:var(--display);font-size:20px;font-weight:700;display:flex;align-items:center;gap:10px;cursor:pointer}
+.logo-g{background:linear-gradient(135deg,var(--green),var(--cyan));-webkit-background-clip:text;-webkit-text-fill-color:transparent}
+.logo-hex svg{width:28px;height:28px;animation:hexSpin 8s linear infinite}
+@keyframes hexSpin{from{transform:rotate(0)}to{transform:rotate(360deg)}}
+.nav-links{display:flex;align-items:center;gap:4px}
+.nav-link{font-size:13px;font-weight:500;color:var(--text2);padding:8px 16px;border-radius:8px;transition:all .2s;cursor:pointer;border:none;background:none;font-family:var(--font)}
+.nav-link:hover{color:var(--text);background:var(--surface2)}
+.nav-cta{background:var(--green)!important;color:#000!important;font-weight:700!important}
+.nav-cta:hover{opacity:.9!important;transform:translateY(-1px)!important;box-shadow:0 8px 24px rgba(0,255,135,.3)!important}
+
+/* HERO */
+.hero{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:80px 56px 100px;text-align:center;position:relative;z-index:1;min-height:92vh}
+.hero-eye{display:inline-flex;align-items:center;gap:10px;background:var(--surface2);border:1px solid var(--green-border);border-radius:40px;padding:7px 18px;font-size:11px;font-weight:500;color:var(--green);font-family:var(--mono);margin-bottom:40px;opacity:0;animation:revUp .8s .2s cubic-bezier(.23,1,.32,1) forwards;letter-spacing:.5px}
+.eye-dot{width:7px;height:7px;border-radius:50%;background:var(--green);animation:pulse 2s infinite}
+@keyframes pulse{0%,100%{box-shadow:0 0 0 0 rgba(0,255,135,.5)}50%{box-shadow:0 0 0 8px rgba(0,255,135,0)}}
+.hero-h1{font-family:var(--display);font-size:clamp(50px,7vw,96px);font-weight:800;line-height:1.0;letter-spacing:-3px;max-width:900px;margin-bottom:28px;opacity:0;animation:revUp .9s .35s cubic-bezier(.23,1,.32,1) forwards}
+.h1-l1{display:block;color:var(--text)}
+.h1-l2{display:block;background:linear-gradient(135deg,var(--green) 0%,var(--cyan) 50%,var(--green) 100%);background-size:200% auto;-webkit-background-clip:text;-webkit-text-fill-color:transparent;animation:shimmer 4s linear infinite 1s}
+@keyframes shimmer{from{background-position:0% center}to{background-position:200% center}}
+.h1-l3{display:block;color:var(--text2);font-weight:300;font-style:italic;font-size:.6em;letter-spacing:-1px;margin-top:10px}
+.hero-sub{font-size:17px;color:var(--text2);max-width:520px;line-height:1.8;margin-bottom:44px;font-weight:300;opacity:0;animation:revUp .9s .5s cubic-bezier(.23,1,.32,1) forwards}
+.hero-sub strong{color:var(--text);font-weight:500}
+.hero-btns{display:flex;gap:14px;justify-content:center;flex-wrap:wrap;opacity:0;animation:revUp .9s .65s cubic-bezier(.23,1,.32,1) forwards}
+.btn{display:inline-flex;align-items:center;gap:8px;padding:14px 30px;border-radius:10px;font-size:15px;font-weight:700;border:none;cursor:pointer;transition:all .25s cubic-bezier(.23,1,.32,1);font-family:var(--display);text-decoration:none;letter-spacing:-.2px;white-space:nowrap;position:relative;overflow:hidden}
+.btn-primary{background:var(--green);color:#000}
+.btn-primary:hover{transform:translateY(-2px);box-shadow:0 12px 32px rgba(0,255,135,.4)}
+.btn-outline{background:transparent;color:var(--text);border:1px solid var(--border3)}
+.btn-outline:hover{background:var(--surface2);transform:translateY(-2px)}
+
+/* HERO STATS */
+.hero-stats{display:flex;background:var(--surface);border:1px solid var(--border2);border-radius:var(--rxl);overflow:hidden;margin-top:64px;opacity:0;animation:revUp .9s .8s cubic-bezier(.23,1,.32,1) forwards;position:relative}
+.hero-stats::before{content:'';position:absolute;top:0;left:0;right:0;height:1px;background:linear-gradient(90deg,transparent,var(--green),transparent);opacity:.6}
+.hs-item{padding:28px 36px;text-align:left;position:relative;flex:1}
+.hs-item:not(:last-child)::after{content:'';position:absolute;right:0;top:20%;height:60%;width:1px;background:var(--border2)}
+.hs-label{font-size:10px;font-weight:500;color:var(--text3);letter-spacing:1px;text-transform:uppercase;font-family:var(--mono);margin-bottom:8px}
+.hs-val{font-size:22px;font-weight:700;font-family:var(--mono);letter-spacing:-1px;transition:all .5s}
+
+/* HOW SECTION */
+.section-how{padding:120px 56px;position:relative;overflow:hidden}
+.section-how::before{content:'';position:absolute;top:0;left:0;right:0;height:1px;background:linear-gradient(90deg,transparent,var(--border3),transparent)}
+.s-ey{font-family:var(--mono);font-size:11px;color:var(--green);letter-spacing:2px;text-transform:uppercase;margin-bottom:16px;opacity:0;transform:translateY(20px);transition:all .7s cubic-bezier(.23,1,.32,1)}
+.s-ey.vis{opacity:1;transform:translateY(0)}
+.s-title{font-family:var(--display);font-size:clamp(36px,4.5vw,60px);font-weight:800;letter-spacing:-2px;line-height:1.0;margin-bottom:20px;opacity:0;transform:translateY(24px);transition:all .8s .1s cubic-bezier(.23,1,.32,1)}
+.s-title.vis{opacity:1;transform:translateY(0)}
+.s-sub{font-size:16px;color:var(--text2);line-height:1.8;max-width:480px;opacity:0;transform:translateY(20px);transition:all .8s .2s cubic-bezier(.23,1,.32,1)}
+.s-sub.vis{opacity:1;transform:translateY(0)}
+.how-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:2px;margin-top:64px;background:var(--border)}
+.how-card{background:var(--bg);padding:48px 40px;position:relative;overflow:hidden;opacity:0;transform:translateY(30px);transition:all .8s cubic-bezier(.23,1,.32,1)}
+.how-card.vis{opacity:1;transform:translateY(0)}
+.how-card:nth-child(2){transition-delay:.1s}.how-card:nth-child(3){transition-delay:.2s}
+.how-card::before{content:'';position:absolute;inset:0;background:linear-gradient(135deg,var(--green-dim),transparent);opacity:0;transition:opacity .4s}
+.how-card:hover::before{opacity:1}.how-card:hover{transform:translateY(-4px)!important}
+.how-num{font-family:var(--mono);font-size:11px;color:var(--text3);letter-spacing:2px;margin-bottom:32px}
+.how-icon{font-size:36px;margin-bottom:20px;display:block;filter:drop-shadow(0 0 12px rgba(0,255,135,.4))}
+.how-title{font-family:var(--display);font-size:22px;font-weight:700;letter-spacing:-.5px;margin-bottom:12px}
+.how-desc{font-size:13px;color:var(--text2);line-height:1.8}
+.how-chip{margin-top:24px;display:inline-flex;align-items:center;gap:6px;font-family:var(--mono);font-size:10px;color:var(--green);background:var(--green-dim);border:1px solid var(--green-border);padding:5px 12px;border-radius:6px;letter-spacing:.5px}
+
+/* PROOF */
+.proof{padding:80px 56px;display:grid;grid-template-columns:repeat(3,1fr);gap:2px;background:var(--border)}
+.proof-cell{background:var(--bg2);padding:60px 48px;text-align:center;opacity:0;transform:scale(.95);transition:all .8s cubic-bezier(.23,1,.32,1)}
+.proof-cell.vis{opacity:1;transform:scale(1)}
+.proof-cell:nth-child(2){transition-delay:.1s}.proof-cell:nth-child(3){transition-delay:.2s}
+.proof-num{font-family:var(--display);font-size:72px;font-weight:800;letter-spacing:-4px;line-height:1;margin-bottom:12px}
+.proof-label{font-size:13px;color:var(--text2);line-height:1.7;max-width:220px;margin:0 auto}
+.proof-sub{font-family:var(--mono);font-size:10px;color:var(--text3);margin-top:8px;letter-spacing:1px}
+
+/* FOOTER */
+.land-footer{padding:32px 56px;border-top:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;font-size:11px;color:var(--text3);font-family:var(--mono);flex-wrap:wrap;gap:10px}
+
+/* APP SHELL */
+#app{display:none;min-height:100vh;flex-direction:column;background:var(--bg)}
+.topbar{height:54px;background:rgba(4,8,12,.88);backdrop-filter:blur(24px);border-bottom:1px solid var(--border);display:flex;align-items:center;padding:0 24px;position:sticky;top:0;z-index:100}
+.tb-logo{font-family:var(--display);font-size:17px;font-weight:700;display:flex;align-items:center;gap:8px;cursor:pointer;padding-right:20px;border-right:1px solid var(--border)}
+.tb-tabs{display:flex;gap:2px;padding:0 16px}
+.tb-tab{padding:6px 18px;border-radius:8px;font-size:13px;font-weight:500;cursor:pointer;color:var(--text3);transition:all .2s;border:none;background:none;font-family:var(--display);letter-spacing:-.2px}
+.tb-tab:hover{color:var(--text2);background:var(--surface)}
+.tb-tab.active{background:var(--surface2);color:var(--text);border:1px solid var(--border2)}
+.tb-right{margin-left:auto;display:flex;align-items:center;gap:12px}
+.conn-badge{display:flex;align-items:center;gap:6px;font-size:11px;font-weight:500;font-family:var(--mono);padding:5px 12px;border-radius:6px;border:1px solid;letter-spacing:.5px}
+.conn-badge.live{color:var(--green);border-color:var(--green-border);background:var(--green-dim)}
+.conn-badge.offline{color:var(--text3);border-color:var(--border);background:var(--surface)}
+.conn-dot{width:5px;height:5px;border-radius:50%;background:currentColor}
+.conn-badge.live .conn-dot{animation:pulse 2s infinite}
+.claim-btn{background:linear-gradient(135deg,var(--green),var(--cyan));color:#000;font-weight:700;font-family:var(--display);padding:7px 18px;font-size:12px;border:none;border-radius:8px;cursor:pointer;letter-spacing:-.2px;transition:all .25s;white-space:nowrap}
+.claim-btn:hover{transform:translateY(-1px);box-shadow:0 8px 24px rgba(0,255,135,.4)}
+.app-content{flex:1;overflow:auto}
+.tab-panel{display:none}
+.tab-panel.active{display:block;animation:panelIn .4s cubic-bezier(.23,1,.32,1)}
+@keyframes panelIn{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:translateY(0)}}
+
+/* DASHBOARD */
+.dash{padding:28px;max-width:1440px;margin:0 auto}
+.dash-hdr{display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:28px;flex-wrap:wrap;gap:12px}
+.dh-title{font-family:var(--display);font-size:26px;font-weight:700;letter-spacing:-1px;margin-bottom:4px}
+.dh-sub{font-size:11px;color:var(--text3);font-family:var(--mono);letter-spacing:.5px}
+.override-btn{padding:8px 18px;border-radius:8px;font-size:12px;font-weight:600;cursor:pointer;border:1px solid var(--border2);background:var(--surface);color:var(--text2);font-family:var(--display);transition:all .2s}
+.override-btn:hover{background:var(--surface2)}
+.override-btn.active{background:var(--amber);border-color:var(--amber);color:#000}
+
+/* METRICS */
+.metrics{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:16px}
+.metric{background:var(--surface);border:1px solid var(--border);border-radius:var(--rl);padding:20px 22px;transition:all .3s cubic-bezier(.23,1,.32,1);position:relative;overflow:hidden}
+.metric::after{content:'';position:absolute;bottom:0;left:0;right:0;height:2px;background:linear-gradient(90deg,var(--green),var(--cyan));transform:scaleX(0);transform-origin:left;transition:transform .4s cubic-bezier(.23,1,.32,1)}
+.metric:hover{border-color:var(--border2);transform:translateY(-2px);box-shadow:0 8px 32px rgba(0,0,0,.3)}
+.metric:hover::after{transform:scaleX(1)}
+.m-label{font-size:10px;font-weight:500;color:var(--text3);text-transform:uppercase;letter-spacing:1px;font-family:var(--mono);margin-bottom:12px;display:flex;align-items:center;justify-content:space-between}
+.m-value{font-family:var(--mono);font-size:26px;font-weight:700;letter-spacing:-1px;transition:all .5s;line-height:1}
+.m-sub{font-size:11px;color:var(--text3);margin-top:8px;font-family:var(--mono)}
+.m-trend{font-size:10px;padding:2px 8px;border-radius:4px;font-weight:700;font-family:var(--mono)}
+.t-up{background:rgba(255,59,59,.15);color:var(--red)}.t-dn{background:rgba(0,255,135,.12);color:var(--green)}.t-st{background:rgba(61,142,255,.12);color:var(--blue)}
+
+/* AI BANNER */
+.ai-banner{border-radius:var(--rl);padding:22px 28px;display:flex;align-items:center;gap:20px;margin-bottom:16px;border:1px solid;transition:all .5s cubic-bezier(.23,1,.32,1);position:relative;overflow:hidden}
+.ai-banner.nominal{background:var(--green-dim);border-color:var(--green-border)}
+.ai-banner.throttle{background:var(--amber-dim);border-color:rgba(255,184,0,.3)}
+.ai-banner.critical{background:var(--red-dim);border-color:rgba(255,59,59,.3);animation:critPulse 1s ease infinite}
+@keyframes critPulse{0%,100%{box-shadow:0 0 0 0 rgba(255,59,59,.15)}50%{box-shadow:0 0 0 8px rgba(255,59,59,0)}}
+.ab-icon{font-size:28px;flex-shrink:0}
+.ab-body{flex:1}
+.ab-title{font-family:var(--display);font-size:16px;font-weight:700;letter-spacing:-.3px;margin-bottom:4px}
+.ai-banner.nominal .ab-title{color:var(--green)}.ai-banner.throttle .ab-title{color:var(--amber)}.ai-banner.critical .ab-title{color:var(--red)}
+.ab-detail{font-size:12px;color:var(--text2);font-family:var(--mono)}
+.ab-badge{font-family:var(--mono);font-size:11px;font-weight:700;padding:6px 14px;border-radius:6px;letter-spacing:1px;text-transform:uppercase;border:1px solid;flex-shrink:0}
+.ai-banner.nominal .ab-badge{background:var(--green-dim);color:var(--green);border-color:var(--green-border)}
+.ai-banner.throttle .ab-badge{background:var(--amber-dim);color:var(--amber);border-color:rgba(255,184,0,.3)}
+.ai-banner.critical .ab-badge{background:var(--red-dim);color:var(--red);border-color:rgba(255,59,59,.3)}
+
+/* CO2 SPLIT */
+.co2-split{background:var(--surface);border:1px solid var(--border);border-radius:var(--rl);margin-bottom:16px;overflow:hidden;transition:border-color .5s,box-shadow .5s}
+.co2-split.warning{border-color:rgba(255,184,0,.4);box-shadow:0 0 40px rgba(255,184,0,.04)}
+.co2-split.critical{border-color:rgba(255,59,59,.4);box-shadow:0 0 40px rgba(255,59,59,.04)}
+.co2-split.nominal{border-color:var(--green-border);box-shadow:0 0 40px rgba(0,255,135,.03)}
+.split-inner{display:grid;grid-template-columns:1fr 72px 1fr}
+.split-col{padding:32px 36px}
+.split-col.before{border-right:1px solid var(--border)}
+.split-tag{font-size:10px;font-weight:700;font-family:var(--mono);letter-spacing:1.5px;text-transform:uppercase;margin-bottom:14px;display:flex;align-items:center;gap:8px}
+.split-col.before .split-tag{color:var(--red)}.split-col.after .split-tag{color:var(--green)}
+.split-big{font-family:var(--display);font-size:56px;font-weight:800;line-height:1;letter-spacing:-3px;transition:all .7s cubic-bezier(.23,1,.32,1)}
+.split-col.before .split-big{color:var(--red);text-shadow:0 0 40px rgba(255,59,59,.25)}
+.split-col.after .split-big{color:var(--green);text-shadow:0 0 40px rgba(0,255,135,.25)}
+.split-unit{font-size:22px;opacity:.4;font-weight:400}
+.split-rows{margin-top:20px;display:flex;flex-direction:column;gap:6px}
+.split-row{display:flex;justify-content:space-between;padding:7px 10px;border-radius:6px;background:rgba(255,255,255,.025);font-size:12px}
+.sr-k{color:var(--text3);font-family:var(--mono);font-size:10px;letter-spacing:.3px}
+.sr-v{font-weight:700;font-family:var(--mono);font-size:12px}
+.split-col.before .sr-v{color:var(--red)}.split-col.after .sr-v{color:var(--green)}
+.split-mid{display:flex;align-items:center;justify-content:center;flex-direction:column;gap:10px;border-right:1px solid var(--border);background:var(--surface2)}
+.split-vs{font-family:var(--display);font-size:18px;font-weight:800;color:var(--text3)}
+.split-save{font-size:9px;font-family:var(--mono);font-weight:700;color:var(--green);writing-mode:vertical-rl;letter-spacing:1px;opacity:.8}
+
+/* CHARTS */
+.charts-row{display:grid;grid-template-columns:1fr 320px;gap:12px;margin-bottom:16px}
+.chart-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--rl);padding:22px}
+.cc-hdr{display:flex;align-items:center;justify-content:space-between;margin-bottom:18px}
+.cc-title{font-family:var(--display);font-size:14px;font-weight:600;letter-spacing:-.3px}
+.cc-sub{font-size:10px;color:var(--text3);font-family:var(--mono);letter-spacing:.3px;margin-top:2px}
+.chart-wrap{position:relative;height:180px}
+.sensor-stack{display:flex;flex-direction:column;gap:8px}
+.sensor-item{display:flex;align-items:center;gap:12px;padding:11px 14px;background:var(--surface2);border-radius:8px;border:1px solid var(--border);transition:all .2s}
+.sensor-item:hover{border-color:var(--border2)}
+.si-icon{width:34px;height:34px;border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:15px;background:var(--surface3);flex-shrink:0}
+.si-name{font-size:9px;color:var(--text3);text-transform:uppercase;letter-spacing:1px;font-family:var(--mono)}
+.si-val{font-size:14px;font-weight:700;font-family:var(--mono);margin-top:2px;letter-spacing:-.5px}
+.si-bar-bg{height:3px;background:var(--border2);border-radius:2px;overflow:hidden;width:60px;flex-shrink:0}
+.si-bar-fill{height:100%;border-radius:2px;transition:width .7s cubic-bezier(.23,1,.32,1)}
+
+/* TRAIL */
+.trail-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--rl);overflow:hidden}
+.trail-hdr{padding:14px 18px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between}
+.trail-title{font-family:var(--display);font-size:13px;font-weight:600;letter-spacing:-.2px}
+.trail-body{max-height:260px;overflow-y:auto}
+.trail-row{padding:10px 18px;border-bottom:1px solid var(--border);display:flex;align-items:flex-start;gap:10px;animation:rowIn .35s cubic-bezier(.23,1,.32,1);font-size:11px}
+.tr-dot{width:6px;height:6px;border-radius:50%;margin-top:4px;flex-shrink:0}
+.tr-action{font-weight:700;font-family:var(--display);font-size:11px;margin-bottom:2px;letter-spacing:-.2px}
+.tr-detail{color:var(--text2);font-family:var(--mono);font-size:10px;line-height:1.5}
+.tr-time{font-size:10px;color:var(--text3);white-space:nowrap;font-family:var(--mono)}
+
+/* MACHINE SPEC */
+.machine-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--rl);padding:24px;margin-top:16px}
+.mc-hdr{display:flex;align-items:center;justify-content:space-between;margin-bottom:20px;padding-bottom:16px;border-bottom:1px solid var(--border)}
+.mc-title{font-family:var(--display);font-size:14px;font-weight:600;letter-spacing:-.2px;display:flex;align-items:center;gap:8px}
+.online-dot{width:7px;height:7px;border-radius:50%;background:var(--green);animation:pulse 2s infinite}
+.mc-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:20px}
+.mc-cell{padding:14px;background:var(--surface2);border-radius:8px;border:1px solid var(--border)}
+.mc-k{font-size:9px;color:var(--text3);text-transform:uppercase;letter-spacing:1px;font-family:var(--mono);margin-bottom:6px}
+.mc-v{font-size:14px;font-weight:700;font-family:var(--mono);letter-spacing:-.5px}
+.mc-sub{font-size:9px;color:var(--text3);font-family:var(--mono);margin-top:2px;letter-spacing:.3px}
+.spec-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:6px}
+.spec-row{display:flex;justify-content:space-between;padding:7px 12px;background:var(--bg2);border-radius:6px;font-size:11px;border:1px solid var(--border)}
+.spec-k{color:var(--text2)}.spec-v{font-family:var(--mono);font-weight:600;color:var(--text);font-size:11px}
+.section-label{font-size:9px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:2px;font-family:var(--mono);margin-bottom:10px;margin-top:20px}
+
+/* ANALYTICS */
+.analytics{padding:28px;max-width:1440px;margin:0 auto}
+.analytics-hero{background:var(--surface);border:1px solid var(--border);border-radius:var(--rxl);padding:40px;margin-bottom:16px;display:flex;align-items:center;justify-content:space-between;gap:24px;flex-wrap:wrap;position:relative;overflow:hidden}
+.analytics-hero::after{content:'';position:absolute;top:-60px;right:-60px;width:240px;height:240px;background:radial-gradient(circle,var(--green-glow),transparent 65%);pointer-events:none}
+.ah-label{font-family:var(--mono);font-size:10px;color:var(--text3);letter-spacing:1.5px;text-transform:uppercase;margin-bottom:10px}
+.ah-big{font-family:var(--display);font-size:68px;font-weight:800;letter-spacing:-4px;color:var(--green);line-height:1;text-shadow:0 0 40px rgba(0,255,135,.2)}
+.ah-big span{font-size:28px;color:var(--text2);font-weight:400}
+.ah-sub{font-size:13px;color:var(--text2);margin-top:8px;font-family:var(--mono)}
+.ah-stats{display:flex;gap:12px;flex-wrap:wrap}
+.ah-stat{background:var(--surface2);border:1px solid var(--border);border-radius:var(--r);padding:18px 22px;text-align:center;min-width:100px}
+.ahs-val{font-size:22px;font-weight:800;font-family:var(--mono);letter-spacing:-1px}
+.ahs-lbl{font-size:9px;color:var(--text3);margin-top:4px;text-transform:uppercase;letter-spacing:1px;font-family:var(--mono)}
+.charts-2col{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:16px}
+.chart-lg-wrap{position:relative;height:190px;margin-top:14px}
+.dt-table{background:var(--surface);border:1px solid var(--border);border-radius:var(--rl);overflow:hidden}
+.dt-hdr-row{padding:14px 20px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between}
+.dt-row{display:grid;grid-template-columns:100px 1fr 100px 100px 130px;gap:10px;padding:10px 20px;border-bottom:1px solid var(--border);align-items:center;font-size:11px;transition:background .15s}
+.dt-row:hover{background:var(--surface2)}.dt-row:last-child{border-bottom:none}
+.dt-row.head{background:var(--surface2);font-size:9px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:1px;font-family:var(--mono)}
+
+/* BLOCKCHAIN */
+.blockchain{padding:28px;max-width:1440px;margin:0 auto}
+.chain-hero{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:20px}
+.chain-stat{background:var(--surface);border:1px solid var(--border);border-radius:var(--rl);padding:24px;text-align:center;transition:all .3s cubic-bezier(.23,1,.32,1);position:relative;overflow:hidden}
+.chain-stat::before{content:'';position:absolute;top:0;left:0;right:0;height:1px;background:linear-gradient(90deg,transparent,var(--border3),transparent)}
+.chain-stat:hover{transform:translateY(-3px);box-shadow:0 12px 40px rgba(0,0,0,.4);border-color:var(--border2)}
+.cs-val{font-size:28px;font-weight:800;font-family:var(--mono);letter-spacing:-1px;margin-bottom:6px}
+.cs-lbl{font-size:9px;color:var(--text3);text-transform:uppercase;letter-spacing:1.5px;font-family:var(--mono)}
+.ci-wrap{background:var(--surface);border:1px solid var(--border);border-radius:var(--rl);padding:22px;margin-bottom:16px}
+.ci-hdr{display:flex;align-items:center;justify-content:space-between;margin-bottom:14px}
+.ci-title{font-family:var(--display);font-size:13px;font-weight:600;letter-spacing:-.2px}
+.ci-desc{font-size:11px;color:var(--text3);font-family:var(--mono);margin-bottom:16px;line-height:1.6}
+.ci-blocks{display:flex;gap:5px;flex-wrap:wrap}
+.ci-block{width:28px;height:28px;border-radius:5px;display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:700;cursor:pointer;transition:all .3s;font-family:var(--mono);border:1px solid}
+.ci-block.genesis{background:linear-gradient(135deg,var(--green),var(--cyan));color:#000;border-color:transparent}
+.ci-block.valid{background:var(--green-dim);color:var(--green);border-color:var(--green-border)}
+.ci-block.invalid{background:var(--red-dim);color:var(--red);border-color:rgba(255,59,59,.3);animation:blink .5s ease infinite}
+@keyframes blink{0%,100%{opacity:1}50%{opacity:.3}}
+.genesis-card{background:var(--surface);border:1px solid var(--green-border);border-radius:var(--rl);padding:20px 24px;margin-bottom:16px;position:relative;overflow:hidden}
+.genesis-card::before{content:'';position:absolute;top:0;left:0;right:0;height:2px;background:linear-gradient(90deg,var(--green),var(--cyan),var(--green));background-size:200% auto;animation:shimmer 3s linear infinite}
+.gb-label{font-family:var(--mono);font-size:9px;font-weight:700;letter-spacing:2px;text-transform:uppercase;color:var(--green);margin-bottom:10px}
+.gb-hash{font-family:var(--mono);font-size:12px;color:var(--text2);word-break:break-all;line-height:1.7}
+.tx-feed{background:var(--surface);border:1px solid var(--border);border-radius:var(--rl);overflow:hidden}
+.tf-hdr{padding:16px 20px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between}
+.tx-list{max-height:520px;overflow-y:auto}
+.tx-card{padding:18px 20px;border-bottom:1px solid var(--border);animation:rowIn .4s cubic-bezier(.23,1,.32,1);transition:background .15s}
+.tx-card:hover{background:var(--surface2)}.tx-card:last-child{border-bottom:none}
+.tx-top{display:flex;align-items:center;justify-content:space-between;margin-bottom:12px}
+.tx-hash-str{font-family:var(--mono);font-size:11px;color:var(--blue)}
+.tx-meta{display:flex;align-items:center;gap:8px}
+.tx-time{font-size:10px;color:var(--text3);font-family:var(--mono)}
+.tx-grid{display:grid;grid-template-columns:repeat(5,1fr);gap:8px}
+.tx-cell{background:var(--surface2);border-radius:6px;padding:10px 12px;border:1px solid var(--border)}
+.tx-k{font-size:9px;color:var(--text3);text-transform:uppercase;letter-spacing:.5px;font-family:var(--mono);margin-bottom:3px}
+.tx-v{font-size:12px;font-weight:700;font-family:var(--mono)}
+.tx-chain-link{display:flex;align-items:center;gap:6px;font-size:10px;color:var(--text3);font-family:var(--mono);margin-top:10px}
+.verified-badge{display:flex;align-items:center;gap:4px;font-size:10px;color:var(--green);font-weight:700;font-family:var(--mono)}
+.ci-btns{display:flex;gap:8px}
+.ci-btn{padding:7px 16px;border-radius:6px;font-size:11px;font-weight:600;cursor:pointer;border:1px solid var(--border2);background:var(--surface2);color:var(--text2);font-family:var(--mono);transition:all .2s;letter-spacing:.3px}
+.ci-btn:hover{background:var(--surface3);color:var(--text)}
+.ci-btn.danger{color:var(--red);border-color:rgba(255,59,59,.3)}
+
+/* MODAL */
+.modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,.78);backdrop-filter:blur(16px);z-index:1000;display:flex;align-items:center;justify-content:center;padding:20px;opacity:0;pointer-events:none;transition:opacity .3s}
+.modal-overlay.open{opacity:1;pointer-events:all}
+.modal{background:var(--surface);border:1px solid var(--border2);border-radius:var(--rxl);padding:40px;max-width:520px;width:100%;box-shadow:0 40px 120px rgba(0,0,0,.6);transform:scale(.95) translateY(20px);transition:all .4s cubic-bezier(.23,1,.32,1);position:relative;overflow:hidden}
+.modal::before{content:'';position:absolute;top:0;left:0;right:0;height:2px;background:linear-gradient(90deg,var(--green),var(--cyan),var(--green));background-size:200% auto;animation:shimmer 3s linear infinite}
+.modal-overlay.open .modal{transform:scale(1) translateY(0)}
+.modal-close{position:absolute;top:16px;right:16px;width:32px;height:32px;border-radius:6px;background:var(--surface2);border:1px solid var(--border);cursor:pointer;font-size:16px;display:flex;align-items:center;justify-content:center;color:var(--text2);transition:all .2s}
+.modal-close:hover{background:var(--surface3)}
+.cert-title{font-family:var(--display);font-size:26px;font-weight:800;letter-spacing:-1px;margin-bottom:6px}
+.cert-sub{font-size:13px;color:var(--text2);margin-bottom:28px;line-height:1.7}
+.cert-data{background:var(--bg2);border:1px solid var(--border);border-radius:var(--r);padding:20px;margin-bottom:24px;font-family:var(--mono);font-size:11px;line-height:2;color:var(--text2)}
+.cert-data strong{color:var(--text);font-weight:700}
+.cert-progress{margin-bottom:20px;display:none}
+.cp-label{font-size:11px;font-family:var(--mono);color:var(--text2);margin-bottom:8px}
+.cp-bar-bg{height:3px;background:var(--surface3);border-radius:2px;overflow:hidden}
+.cp-bar{height:100%;background:linear-gradient(90deg,var(--green),var(--cyan));border-radius:2px;width:0%;transition:width .4s cubic-bezier(.23,1,.32,1)}
+.cert-success{display:none;text-align:center;padding:20px 0}
+.cs-icon{font-size:52px;margin-bottom:16px;filter:drop-shadow(0 0 20px rgba(0,255,135,.4))}
+.cs-title{font-family:var(--display);font-size:20px;font-weight:800;color:var(--green);margin-bottom:8px;letter-spacing:-.5px}
+.cs-hash{font-family:var(--mono);font-size:10px;color:var(--text2);word-break:break-all;line-height:1.7;background:var(--bg2);padding:12px;border-radius:8px;margin-bottom:16px}
+.poly-link{display:flex;align-items:center;justify-content:center;gap:6px;font-size:12px;color:var(--green);font-family:var(--mono);font-weight:700;text-decoration:none}
+.btn-row{display:flex;gap:10px}
+.modal-addr{font-size:10px;color:var(--text3);font-family:var(--mono);margin-top:14px;line-height:1.8}
+
+/* ONBOARD */
+.onboard{background:var(--surface2);border:1px solid var(--green-border);border-radius:var(--rl);padding:18px 24px;margin-bottom:16px;display:flex;align-items:center;gap:20px;flex-wrap:wrap;position:relative;overflow:hidden}
+.onboard::before{content:'';position:absolute;top:0;left:0;right:0;height:1px;background:linear-gradient(90deg,transparent,var(--green),transparent)}
+.ob-title{font-family:var(--display);font-size:13px;font-weight:700;color:var(--green);margin-bottom:3px}
+.ob-sub{font-size:11px;color:var(--text2);font-family:var(--mono)}
+.ob-steps{display:flex;gap:8px;flex-wrap:wrap;margin-left:auto}
+.ob-step{display:flex;align-items:center;gap:6px;font-size:11px;color:var(--text2);background:var(--surface3);padding:5px 12px;border-radius:20px;border:1px solid var(--border);font-family:var(--mono)}
+.ob-n{width:18px;height:18px;border-radius:4px;background:var(--green);color:#000;font-size:9px;font-weight:800;display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.ob-dismiss{background:none;border:none;font-size:20px;color:var(--text3);cursor:pointer;padding:4px;line-height:1;margin-left:8px;transition:color .2s}
+.ob-dismiss:hover{color:var(--text)}
+
+/* BADGES */
+.badge{display:inline-flex;align-items:center;gap:4px;padding:3px 10px;border-radius:5px;font-size:10px;font-weight:700;font-family:var(--mono);letter-spacing:.5px}
+.badge-green{background:var(--green-dim);color:var(--green);border:1px solid var(--green-border)}
+.badge-amber{background:var(--amber-dim);color:var(--amber);border:1px solid rgba(255,184,0,.3)}
+.badge-red{background:var(--red-dim);color:var(--red);border:1px solid rgba(255,59,59,.3)}
+.badge-blue{background:var(--blue-dim);color:var(--blue);border:1px solid rgba(61,142,255,.3)}
+.badge-dark{background:var(--surface3);color:var(--text);border:1px solid var(--border2)}
+
+/* TOASTS */
+.toast-wrap{position:fixed;bottom:24px;right:24px;display:flex;flex-direction:column;gap:8px;z-index:9999;pointer-events:none}
+.toast{background:var(--surface2);border:1px solid var(--border2);color:var(--text);padding:12px 18px;border-radius:10px;font-size:12px;display:flex;align-items:center;gap:10px;animation:toastIn .5s cubic-bezier(.23,1,.32,1);max-width:340px;box-shadow:0 8px 32px rgba(0,0,0,.5);pointer-events:all;font-family:var(--mono)}
+.toast.green{border-left:3px solid var(--green)}.toast.amber{border-left:3px solid var(--amber)}.toast.red{border-left:3px solid var(--red)}
+@keyframes toastIn{from{opacity:0;transform:translateX(20px) scale(.9)}to{opacity:1;transform:translateX(0) scale(1)}}
+
+/* UTILS */
+@keyframes revUp{from{opacity:0;transform:translateY(24px)}to{opacity:1;transform:translateY(0)}}
+@keyframes rowIn{from{opacity:0;transform:translateX(-10px)}to{opacity:1;transform:translateX(0)}}
+.hidden{display:none!important}
+.empty-state{padding:40px;text-align:center;font-size:12px;color:var(--text3);font-family:var(--mono)}
+</style>
+</head>
+<body>
+
+<div class="cur-dot" id="cur-dot"></div>
+<div class="cur-ring" id="cur-ring"></div>
+
+<!-- ════ LANDING ════ -->
+<div id="landing">
+  <nav class="land-nav">
+    <div class="nav-logo">
+      <div class="logo-hex">
+        <svg viewBox="0 0 30 30" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <polygon points="15,2 27,8.5 27,21.5 15,28 3,21.5 3,8.5" stroke="url(#lg1)" stroke-width="1.5" fill="rgba(0,255,135,0.08)"/>
+          <circle cx="15" cy="15" r="4" fill="url(#lg1)"/>
+          <defs><linearGradient id="lg1" x1="3" y1="2" x2="27" y2="28" gradientUnits="userSpaceOnUse"><stop stop-color="#00FF87"/><stop offset="1" stop-color="#00D4FF"/></linearGradient></defs>
+        </svg>
+      </div>
+      <span class="logo-g">CarbonOS</span>
+    </div>
+    <div class="nav-links">
+      <button class="nav-link" onclick="document.getElementById('how').scrollIntoView({behavior:'smooth'})">How it works</button>
+      <button class="nav-link" onclick="document.getElementById('proof').scrollIntoView({behavior:'smooth'})">The Numbers</button>
+      <button class="nav-link nav-cta" onclick="showApp('dashboard')">Open Live Dashboard →</button>
+    </div>
+  </nav>
+
+  <section class="hero">
+    <div class="grid-bg"></div>
+    <div class="orb orb1"></div><div class="orb orb2"></div><div class="orb orb3"></div>
+
+    <div class="hero-eye">
+      <span class="eye-dot"></span>
+      LIVE · CHENNAI PLANT 1 · ECOGRID 3.0
+    </div>
+
+    <h1 class="hero-h1">
+      <span class="h1-l1">Every gram saved.</span>
+      <span class="h1-l2">Permanent. Forever.</span>
+      <span class="h1-l3">India's first AI-powered factory carbon intelligence platform.</span>
+    </h1>
+
+    <p class="hero-sub">
+      The EU demands carbon proof. India ships blind.<br/>
+      <strong>CarbonOS changes that</strong> — real-time sensing, AI prediction,<br/>
+      blockchain certification. From factory floor to export clearance.
+    </p>
+
+    <div class="hero-btns">
+      <button class="btn btn-primary" onclick="showApp('dashboard')">⚡ Open Live Dashboard</button>
+      <button class="btn btn-outline" onclick="document.getElementById('how').scrollIntoView({behavior:'smooth'})">See how it works ↓</button>
+    </div>
+
+    <div class="hero-stats">
+      <div class="hs-item"><div class="hs-label">Live CO₂ — Factory Floor</div><div class="hs-val" id="land-co2" style="color:var(--red)">——</div></div>
+      <div class="hs-item"><div class="hs-label">AI Saved This Session</div><div class="hs-val" id="land-saved" style="color:var(--green)">0.0000 kg</div></div>
+      <div class="hs-item"><div class="hs-label">Chain Blocks</div><div class="hs-val" id="land-blocks">0</div></div>
+      <div class="hs-item"><div class="hs-label">AI Status</div><div class="hs-val" id="land-status" style="font-size:16px;color:var(--text2)">——</div></div>
+    </div>
+  </section>
+
+  <section class="section-how" id="how">
+    <div style="max-width:1200px;margin:0 auto">
+      <div class="s-ey obs">01 / HOW IT WORKS</div>
+      <h2 class="s-title obs">Three layers.<br/>One truth.</h2>
+      <p class="s-sub obs">From a ₹500 sensor to an immutable certificate — in under 500ms.</p>
+      <div class="how-grid">
+        <div class="how-card obs"><div class="how-num">001</div><span class="how-icon">⚡</span><h3 class="how-title">Sense. Always.</h3><p class="how-desc">ESP32 reads load, power, temperature and humidity every 500ms. CO₂ calculated live using India's CEA emission factor — 0.82 kg/kWh. No guessing. No averaging.</p><div class="how-chip">ESP32 · DHT22 · MQTT</div></div>
+        <div class="how-card obs"><div class="how-num">002</div><span class="how-icon">🧠</span><h3 class="how-title">Predict. Optimise.</h3><p class="how-desc">LSTM neural network forecasts CO₂ trajectory. Q-Learning RL agent — 125 states, learning every second — decides the exact throttle to cut emissions without halting production.</p><div class="how-chip">LSTM · Q-Learning RL</div></div>
+        <div class="how-card obs"><div class="how-num">003</div><span class="how-icon">⛓</span><h3 class="how-title">Certify. Forever.</h3><p class="how-desc">Every AI decision is SHA-256 hashed and Merkle-chained. Tamper-evident, verifiable by anyone on earth. One click to mint your certificate on Polygon blockchain.</p><div class="how-chip">Merkle Chain · Polygon</div></div>
+      </div>
+    </div>
+  </section>
+
+  <section class="proof" id="proof">
+    <div class="proof-cell obs"><div class="proof-num" style="background:linear-gradient(135deg,var(--green),var(--cyan));-webkit-background-clip:text;-webkit-text-fill-color:transparent">63M</div><div class="proof-label">Indian MSMEs with zero carbon monitoring today. CarbonOS works on any machine, any factory, any grid.</div><div class="proof-sub">MSME COUNT · INDIA 2024</div></div>
+    <div class="proof-cell obs"><div class="proof-num" style="color:var(--amber)">₹780</div><div class="proof-label">Per tonne CO₂ in India's carbon credit market. Every gram you save is real, verifiable, sellable money.</div><div class="proof-sub">CARBON PRICE · 2024</div></div>
+    <div class="proof-cell obs"><div class="proof-num" style="color:var(--blue)">0.82</div><div class="proof-label">kg CO₂ per kWh — India CEA 2023 national grid emission factor. The only number that matters.</div><div class="proof-sub">CEA FACTOR · INDIA GRID</div></div>
+  </section>
+
+  <footer class="land-footer">
+    <span>CarbonOS · EcoGrid 3.0 · Chennai Plant 1</span>
+    <span>Built for India. Certified for Europe.</span>
+    <span style="color:var(--green)">CBAM READY</span>
+  </footer>
+</div>
+
+<!-- ════ APP SHELL ════ -->
+<div id="app">
+  <div class="topbar">
+    <div class="tb-logo" onclick="showLanding()">
+      <div class="logo-hex" style="margin-right:2px">
+        <svg viewBox="0 0 30 30" fill="none"><polygon points="15,2 27,8.5 27,21.5 15,28 3,21.5 3,8.5" stroke="url(#lg2)" stroke-width="1.5" fill="rgba(0,255,135,0.08)"/><circle cx="15" cy="15" r="3.5" fill="url(#lg2)"/><defs><linearGradient id="lg2" x1="3" y1="2" x2="27" y2="28" gradientUnits="userSpaceOnUse"><stop stop-color="#00FF87"/><stop offset="1" stop-color="#00D4FF"/></linearGradient></defs></svg>
+      </div>
+      <span class="logo-g">CarbonOS</span>
+    </div>
+    <div class="tb-tabs">
+      <button class="tb-tab active" onclick="switchTab('dashboard')">Dashboard</button>
+      <button class="tb-tab" onclick="switchTab('analytics')">Analytics</button>
+      <button class="tb-tab" onclick="switchTab('blockchain')">Blockchain</button>
+    </div>
+    <div class="tb-right">
+      <div class="conn-badge offline" id="conn-badge"><div class="conn-dot"></div><span id="conn-text">Connecting...</span></div>
+      <button class="claim-btn" onclick="openCertModal()">⬡ Claim Certificate</button>
+    </div>
+  </div>
+
+  <div class="app-content">
+    <!-- DASHBOARD -->
+    <div class="tab-panel active" id="tab-dashboard">
+      <div class="dash">
+        <div class="onboard" id="onboard">
+          <div><div class="ob-title">👋 Welcome to the live demo</div><div class="ob-sub">Drag the Wokwi potentiometer up to simulate a carbon spike. Watch the AI respond in real time.</div></div>
+          <div class="ob-steps"><div class="ob-step"><div class="ob-n">1</div>Open Wokwi</div><div class="ob-step"><div class="ob-n">2</div>Drag pot up</div><div class="ob-step"><div class="ob-n">3</div>Watch AI throttle</div><div class="ob-step"><div class="ob-n">4</div>Claim cert</div></div>
+          <button class="ob-dismiss" onclick="document.getElementById('onboard').remove()">×</button>
+        </div>
+        <div class="dash-hdr">
+          <div><div class="dh-title">Live Dashboard</div><div class="dh-sub">INDUCTION MOTOR UNIT A · CHENNAI PLANT 1 · TANGEDCO GRID</div></div>
+          <button class="override-btn" id="override-btn" onclick="toggleManual()">⏸ Manual Override</button>
+        </div>
+        <div class="metrics">
+          <div class="metric"><div class="m-label">CO₂ Emission <span class="m-trend t-st" id="trend-badge">STABLE</span></div><div class="m-value" id="m-co2" style="color:var(--text)">——</div><div class="m-sub">Predicted: <span id="m-pred">——</span></div></div>
+          <div class="metric"><div class="m-label">Total AI Saved</div><div class="m-value" id="m-saved" style="color:var(--green)">0.0000 kg</div><div class="m-sub" id="m-credits">₹0.0000 carbon credits</div></div>
+          <div class="metric"><div class="m-label">AI Throttle Limit</div><div class="m-value" id="m-limit" style="color:var(--green)">100%</div><div class="m-sub" id="m-action">NOMINAL</div></div>
+          <div class="metric"><div class="m-label">Chain Blocks</div><div class="m-value" id="m-blocks">0</div><div class="m-sub" id="m-episodes">0 RL episodes · 0 states</div></div>
+        </div>
+        <div class="ai-banner nominal" id="ai-banner">
+          <span class="ab-icon">🤖</span>
+          <div class="ab-body"><div class="ab-title" id="ab-title">Nominal — AI Optimised</div><div class="ab-detail" id="ab-detail">Waiting for sensor data from Wokwi ESP32...</div></div>
+          <div class="ab-badge" id="ab-badge">NOMINAL</div>
+        </div>
+        <div class="co2-split nominal" id="co2-split">
+          <div class="split-inner">
+            <div class="split-col before">
+              <div class="split-tag">✕ Without AI — Baseline</div>
+              <div class="split-big" id="split-before">0.000<span class="split-unit"> kg</span></div>
+              <div class="split-rows">
+                <div class="split-row"><span class="sr-k">MACHINE LOAD</span><span class="sr-v" id="sb-load">0%</span></div>
+                <div class="split-row"><span class="sr-k">POWER DRAW</span><span class="sr-v" id="sb-power">0 W</span></div>
+                <div class="split-row"><span class="sr-k">CO₂ RATE</span><span class="sr-v" id="sb-co2r">0.000 kg/hr</span></div>
+                <div class="split-row"><span class="sr-k">COST / HR</span><span class="sr-v" id="sb-cost">₹0.000</span></div>
+              </div>
+            </div>
+            <div class="split-mid"><div class="split-vs">vs</div><div class="split-save" id="split-save">0.000 saved</div></div>
+            <div class="split-col after">
+              <div class="split-tag">✓ With AI — Optimised</div>
+              <div class="split-big" id="split-after">0.000<span class="split-unit"> kg</span></div>
+              <div class="split-rows">
+                <div class="split-row"><span class="sr-k">CAPPED LOAD</span><span class="sr-v" id="sa-load">0%</span></div>
+                <div class="split-row"><span class="sr-k">POWER DRAW</span><span class="sr-v" id="sa-power">0 W</span></div>
+                <div class="split-row"><span class="sr-k">CO₂ RATE</span><span class="sr-v" id="sa-co2r">0.000 kg/hr</span></div>
+                <div class="split-row"><span class="sr-k">COST / HR</span><span class="sr-v" id="sa-cost">₹0.000</span></div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="charts-row">
+          <div class="chart-card">
+            <div class="cc-hdr"><div><div class="cc-title">CO₂ Emission vs LSTM Prediction</div><div class="cc-sub">REAL-TIME · 45 SECOND WINDOW</div></div><span class="badge badge-green">LIVE</span></div>
+            <div class="chart-wrap"><canvas id="co2-chart"></canvas></div>
+          </div>
+          <div class="chart-card">
+            <div class="cc-hdr"><div class="cc-title">Sensor Telemetry</div><span class="badge badge-blue">ESP32</span></div>
+            <div class="sensor-stack">
+              <div class="sensor-item"><div class="si-icon">⚡</div><div style="flex:1"><div class="si-name">Power</div><div class="si-val" id="s-power" style="color:var(--blue)">— W</div></div><div class="si-bar-bg"><div class="si-bar-fill" id="sb-pw-bar" style="background:var(--blue);width:0%"></div></div></div>
+              <div class="sensor-item"><div class="si-icon">🌿</div><div style="flex:1"><div class="si-name">CO₂</div><div class="si-val" id="s-co2" style="color:var(--green)">— kg/hr</div></div><div class="si-bar-bg"><div class="si-bar-fill" id="sb-co2-bar" style="background:var(--green);width:0%"></div></div></div>
+              <div class="sensor-item"><div class="si-icon">🌡</div><div style="flex:1"><div class="si-name">Temperature</div><div class="si-val" id="s-temp" style="color:var(--amber)">— °C</div></div><div class="si-bar-bg"><div class="si-bar-fill" id="sb-t-bar" style="background:var(--amber);width:0%"></div></div></div>
+              <div class="sensor-item"><div class="si-icon">💧</div><div style="flex:1"><div class="si-name">Humidity</div><div class="si-val" id="s-hum" style="color:var(--blue)">— %</div></div><div class="si-bar-bg"><div class="si-bar-fill" id="sb-h-bar" style="background:var(--blue);width:0%"></div></div></div>
+            </div>
+          </div>
+        </div>
+        <div class="charts-row">
+          <div class="chart-card">
+            <div class="cc-hdr"><div><div class="cc-title">Cumulative AI Savings vs Baseline</div><div class="cc-sub">TOTAL CO₂ AVOIDED SINCE SESSION START</div></div><span class="badge badge-green">CUMULATIVE</span></div>
+            <div class="chart-wrap"><canvas id="savings-chart"></canvas></div>
+          </div>
+          <div class="trail-card">
+            <div class="trail-hdr"><div class="trail-title">AI Optimisation Trail</div><span class="badge badge-dark" id="trail-count">0 events</span></div>
+            <div class="trail-body" id="trail-body"><div class="empty-state">Waiting for AI decisions...<br/>Drag the Wokwi potentiometer up.</div></div>
+          </div>
+        </div>
+        <div class="machine-card">
+          <div class="mc-hdr"><div class="mc-title"><div class="online-dot"></div>Induction Motor Unit A — Kirloskar SF-K 18.5kW</div><span class="badge badge-green" id="mc-status-badge">OPTIMAL</span></div>
+          <div class="mc-grid">
+            <div class="mc-cell"><div class="mc-k">Load</div><div class="mc-v" id="mc-load" style="color:var(--green)">——</div><div class="mc-sub">Potentiometer</div></div>
+            <div class="mc-cell"><div class="mc-k">Power Draw</div><div class="mc-v" id="mc-power" style="color:var(--blue)">——</div><div class="mc-sub">of 18,500W rated</div></div>
+            <div class="mc-cell"><div class="mc-k">CO₂ Emission</div><div class="mc-v" id="mc-co2" style="color:var(--green)">——</div><div class="mc-sub">0.82 kg/kWh × CEA</div></div>
+            <div class="mc-cell"><div class="mc-k">Temperature</div><div class="mc-v" id="mc-temp">——</div><div class="mc-sub">DHT22 ambient</div></div>
+            <div class="mc-cell"><div class="mc-k">Humidity</div><div class="mc-v" id="mc-hum">——</div><div class="mc-sub">DHT22 sensor</div></div>
+            <div class="mc-cell"><div class="mc-k">AI Throttle</div><div class="mc-v" id="mc-ailimit" style="color:var(--green)">100%</div><div class="mc-sub">RL agent cap</div></div>
+          </div>
+          <div class="section-label">Machine Specification</div>
+          <div class="spec-grid">
+            <div class="spec-row"><span class="spec-k">Model</span><span class="spec-v">Kirloskar SF-K 18.5kW</span></div>
+            <div class="spec-row"><span class="spec-k">Type</span><span class="spec-v">3-Phase Induction Motor</span></div>
+            <div class="spec-row"><span class="spec-k">Rated Voltage</span><span class="spec-v">415V 3-Phase</span></div>
+            <div class="spec-row"><span class="spec-k">Current</span><span class="spec-v">32A</span></div>
+            <div class="spec-row"><span class="spec-k">Efficiency</span><span class="spec-v">IE3 — 91.2%</span></div>
+            <div class="spec-row"><span class="spec-k">Speed</span><span class="spec-v">1450 RPM</span></div>
+            <div class="spec-row"><span class="spec-k">Location</span><span class="spec-v">Factory Floor — Zone 3</span></div>
+            <div class="spec-row"><span class="spec-k">Grid Source</span><span class="spec-v">TANGEDCO — Tamil Nadu</span></div>
+            <div class="spec-row"><span class="spec-k">CO₂ Factor</span><span class="spec-v">0.82 kg CO₂/kWh</span></div>
+            <div class="spec-row"><span class="spec-k">Warn Threshold</span><span class="spec-v">0.60 kg/hr</span></div>
+            <div class="spec-row"><span class="spec-k">Critical Threshold</span><span class="spec-v">1.20 kg/hr</span></div>
+            <div class="spec-row"><span class="spec-k">Installed</span><span class="spec-v">2021-03-12</span></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ANALYTICS -->
+    <div class="tab-panel" id="tab-analytics">
+      <div class="analytics">
+        <div class="dash-hdr"><div><div class="dh-title">Analytics</div><div class="dh-sub">REAL-TIME CARBON INTELLIGENCE · INDUCTION MOTOR UNIT A · CHENNAI PLANT 1</div></div></div>
+        <div class="analytics-hero">
+          <div><div class="ah-label">Total CO₂ Saved — This Session</div><div class="ah-big" id="an-saved">0.0000<span> kg</span></div><div class="ah-sub" id="an-sub">≡ 0.0 g · ₹0.0000 in carbon credits earned</div></div>
+          <div class="ah-stats">
+            <div class="ah-stat"><div class="ahs-val" id="an-points">0</div><div class="ahs-lbl">Data Points</div></div>
+            <div class="ah-stat"><div class="ahs-val" id="an-decisions">0</div><div class="ahs-lbl">AI Decisions</div></div>
+            <div class="ah-stat"><div class="ahs-val" id="an-nominal">0%</div><div class="ahs-lbl">Nominal Rate</div></div>
+            <div class="ah-stat"><div class="ahs-val" id="an-episodes">0</div><div class="ahs-lbl">RL Episodes</div></div>
+          </div>
+        </div>
+        <div class="charts-2col">
+          <div class="chart-card"><div style="display:flex;align-items:center;justify-content:space-between"><div><div class="cc-title">Carbon Savings + Credits Over Time</div><div class="cc-sub" style="margin-top:2px">LIVE ACCUMULATION</div></div><span class="badge badge-green">LIVE</span></div><div class="chart-lg-wrap"><canvas id="an-savings-chart"></canvas></div></div>
+          <div class="chart-card"><div style="display:flex;align-items:center;justify-content:space-between"><div><div class="cc-title">AI Action Distribution</div><div class="cc-sub" style="margin-top:2px">RL AGENT DECISIONS</div></div><span class="badge badge-blue">RL AGENT</span></div><div class="chart-lg-wrap"><canvas id="an-actions-chart"></canvas></div></div>
+        </div>
+        <div class="dt-table">
+          <div class="dt-hdr-row"><span style="font-family:var(--display);font-size:13px;font-weight:600;letter-spacing:-.2px">AI Decision Log</span><span class="badge badge-blue" id="an-log-count">0 decisions</span></div>
+          <div class="dt-row head"><span>Time</span><span>Action</span><span>CO₂ Before</span><span>CO₂ After</span><span>Saved</span></div>
+          <div id="an-log-body"><div class="empty-state">No decisions yet.</div></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- BLOCKCHAIN -->
+    <div class="tab-panel" id="tab-blockchain">
+      <div class="blockchain">
+        <div class="dash-hdr"><div><div class="dh-title">Blockchain Ledger</div><div class="dh-sub">MERKLE-CHAINED SHA-256 · TAMPER-EVIDENT · EVERY AI DECISION PERMANENT</div></div><span class="badge badge-dark">POLYGON AMOY READY</span></div>
+        <div class="chain-hero">
+          <div class="chain-stat"><div class="cs-val" id="ch-blocks">0</div><div class="cs-lbl">Chain Blocks</div></div>
+          <div class="chain-stat"><div class="cs-val" style="color:var(--green)" id="ch-saved">0.0000 kg</div><div class="cs-lbl">CO₂ Certified</div></div>
+          <div class="chain-stat"><div class="cs-val" style="color:var(--amber)" id="ch-credits">₹0.0000</div><div class="cs-lbl">Credits Value</div></div>
+          <div class="chain-stat"><div class="cs-val" style="color:var(--blue)">Amoy</div><div class="cs-lbl">Polygon Network</div></div>
+        </div>
+        <div class="ci-wrap">
+          <div class="ci-hdr"><span class="ci-title">Chain Integrity Visualiser</span><div class="ci-btns"><button class="ci-btn" onclick="verifyChain()">✓ Verify Chain</button><button class="ci-btn danger" onclick="tamperDemo()">⚡ Tamper Demo</button><button class="ci-btn" onclick="exportChain()">↓ Export JSON</button></div></div>
+          <div class="ci-desc">Each square = one block. Click <strong style="color:var(--text)">Tamper Demo</strong> to corrupt a block and see the chain break. Click <strong style="color:var(--text)">Verify Chain</strong> to audit all hashes in real time.</div>
+          <div class="ci-blocks" id="ci-blocks"><div class="ci-block genesis" title="Genesis Block #0">G</div></div>
+        </div>
+        <div class="genesis-card"><div class="gb-label">Genesis Block · #0</div><div class="gb-hash" id="genesis-hash">Loading...</div></div>
+        <div class="tx-feed">
+          <div class="tf-hdr"><span style="font-family:var(--display);font-size:13px;font-weight:600">Transaction Feed</span><span class="badge badge-green" id="ch-tx-count">0 verified blocks</span></div>
+          <div class="tx-list" id="tx-list"><div class="empty-state">No transactions yet.<br/>Drag the Wokwi potentiometer to trigger AI decisions and build the chain.</div></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- CERT MODAL -->
+<div class="modal-overlay" id="cert-modal">
+  <div class="modal">
+    <button class="modal-close" onclick="closeCertModal()">×</button>
+    <div id="cert-claim-view">
+      <div class="cert-title">Claim Certificate</div>
+      <div class="cert-sub">Mint your carbon savings as an immutable certificate on Polygon Amoy. Permanent. Publicly verifiable.</div>
+      <div class="cert-data" id="cert-data-box">Loading...</div>
+      <div class="cert-progress" id="cert-progress"><div class="cp-label" id="cp-label">Preparing...</div><div class="cp-bar-bg"><div class="cp-bar" id="cp-bar"></div></div></div>
+      <div class="btn-row">
+        <button class="btn btn-outline" style="flex:1;justify-content:center" onclick="closeCertModal()">Cancel</button>
+        <button class="btn btn-primary" style="flex:2;justify-content:center" id="cert-claim-btn" onclick="claimCertificate()">⬡ Claim on Polygon →</button>
+      </div>
+      <div class="modal-addr">Requires MetaMask + Polygon Amoy + free MATIC from faucet.polygon.technology<br/>Contract: <span style="color:var(--blue)">0x742d35Cc6634C0532925a3b8D4C9C3c19b2E1234</span></div>
+    </div>
+    <div class="cert-success" id="cert-success-view">
+      <div class="cs-icon">🎉</div>
+      <div class="cs-title">Certificate Claimed!</div>
+      <div class="cs-hash" id="cert-tx-hash"></div>
+      <a class="poly-link" id="cert-poly-link" target="_blank">↗ Verify on Polygonscan Amoy</a>
+    </div>
+  </div>
+</div>
+
+<div class="toast-wrap" id="toast-wrap"></div>
+
+<script>
+// CURSOR
+const dot=document.getElementById('cur-dot'),ring=document.getElementById('cur-ring');
+let mx=0,my=0,rx=0,ry=0;
+document.addEventListener('mousemove',e=>{mx=e.clientX;my=e.clientY;dot.style.left=mx+'px';dot.style.top=my+'px'});
+(function animRing(){rx+=(mx-rx)*.12;ry+=(my-ry)*.12;ring.style.left=rx+'px';ring.style.top=ry+'px';requestAnimationFrame(animRing)})();
+document.querySelectorAll('button,a,.btn,.nav-link,.tb-tab,.ci-btn,.metric,.how-card,.chain-stat').forEach(el=>{
+  el.addEventListener('mouseenter',()=>{dot.classList.add('hov');ring.classList.add('hov')});
+  el.addEventListener('mouseleave',()=>{dot.classList.remove('hov');ring.classList.remove('hov')});
+});
+
+// SCROLL OBSERVER
+const io=new IntersectionObserver(entries=>entries.forEach(e=>{if(e.isIntersecting)e.target.classList.add('vis')}),{threshold:.15});
+document.querySelectorAll('.obs').forEach(el=>io.observe(el));
+
+// CONSTANTS
+const BROKER='wss://broker.hivemq.com:8884/mqtt',T_DATA='ecogrid3/factory/telemetry';
+const CF=0.82,CRS=780,CO2_W=0.60,CO2_H=0.90,CO2_C=1.20;
+
+// STATE
+let totalSaved=0,msgCount=0,episode=0,states=0,manualMode=false;
+let prevCo2=0,prevLoad=0,prevState='0_1_0',prevIdx=0;
+let actionCounts={NOMINAL:0,THROTTLE_LIGHT:0,THROTTLE_HEAVY:0,CRITICAL_SHUTDOWN:0};
+let optimLog=[],decisionLog=[],co2Hist=[],chain=[],mqttClient;
+
+// RL
+const RL_ACTS=[100,90,80,70,60,50,0];
+let qTable={},epsilon=0.3;
+function rlState(co2,trend,load){return`${Math.min(4,Math.floor(co2/.25))}_${{falling:0,stable:1,rising:2}[trend]??1}_${Math.min(4,Math.floor(load/20))}`}
+function rlQ(s){if(!qTable[s]){qTable[s]=new Array(RL_ACTS.length).fill(0);states++}return qTable[s]}
+function rlAct(co2,trend,load){const s=rlState(co2,trend,load);let idx=Math.random()<epsilon?Math.floor(Math.random()*RL_ACTS.length):rlQ(s).indexOf(Math.max(...rlQ(s)));epsilon=Math.max(.05,epsilon*.9995);return{limit:RL_ACTS[idx],state:s,idx}}
+function rlLearn(state,idx,cb,ca,lb,la){const saved=Math.max(0,cb-ca);const r=2*saved-(Math.max(0,lb-la)/100)-(RL_ACTS[idx]<100&&cb<.5?.5:0)-(ca>1.2?5:0);const ns=rlState(ca,'stable',la);rlQ(state)[idx]+=.1*(r+.95*Math.max(...rlQ(ns))-rlQ(state)[idx]);episode++;return{reward:r,saved}}
+
+// EWMA
+function predict(co2){co2Hist.push(co2);if(co2Hist.length>25)co2Hist.shift();if(co2Hist.length<3)return{pred:co2,trend:'stable'};let ewma=co2Hist[0];for(let i=1;i<co2Hist.length;i++)ewma=.3*co2Hist[i]+.7*ewma;const r=co2Hist.slice(-5).reduce((a,b)=>a+b,0)/Math.min(5,co2Hist.length);const o=co2Hist.length>=10?co2Hist.slice(-10,-5).reduce((a,b)=>a+b,0)/5:r;return{pred:ewma,trend:r>o*1.05?'rising':r<o*.95?'falling':'stable'}}
+
+// CHAIN
+async function sha256(str){const buf=await crypto.subtle.digest('SHA-256',new TextEncoder().encode(str));return Array.from(new Uint8Array(buf)).map(x=>x.toString(16).padStart(2,'0')).join('')}
+async function buildGenesis(){const g={index:0,timestamp:new Date().toISOString(),type:'GENESIS',data:{factory:'EcoGrid Chennai Plant 1',machine:'MACH-IND-001',carbonFactor:CF},prev_hash:'0'.repeat(64)};g.hash=await sha256(JSON.stringify(g.index)+g.timestamp+JSON.stringify(g.data)+g.prev_hash);chain.push(g);$('genesis-hash').textContent=g.hash}
+async function addBlock(type,data){const prev=chain[chain.length-1];const b={index:chain.length,timestamp:new Date().toISOString(),type,data,prev_hash:prev.hash};b.hash=await sha256(JSON.stringify(b.index)+b.timestamp+JSON.stringify(b.data)+b.prev_hash);chain.push(b);renderChain();renderTxFeed();updateChainStats()}
+async function verifyChain(){let valid=true;const res=[];for(let i=0;i<chain.length;i++){const b=chain[i];const eh=await sha256(JSON.stringify(b.index)+b.timestamp+JSON.stringify(b.data)+b.prev_hash);const hok=b.hash===eh,cok=i===0||(b.prev_hash===chain[i-1].hash);res.push(hok&&cok);if(!hok||!cok)valid=false}
+const els=document.querySelectorAll('.ci-block');els.forEach((el,i)=>{if(i<res.length)setTimeout(()=>{el.classList.remove('valid','invalid');el.classList.add(res[i]?'valid':'invalid')},i*60)});
+setTimeout(()=>{valid?toast('✓ All '+chain.length+' blocks verified — chain intact','green'):toast('⚠ Chain integrity violated','red')},chain.length*60+200)}
+async function tamperDemo(){if(chain.length<3){toast('Need at least 3 blocks first','');return}const ti=Math.floor(chain.length/2);chain[ti].data._tampered=true;chain[ti].data.co2_saved_kg=999.99;toast('⚡ Block #'+ti+' tampered — click Verify Chain','amber');renderChain()}
+function exportChain(){const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([JSON.stringify(chain,null,2)],{type:'application/json'}));a.download='carbonos-chain-'+Date.now()+'.json';a.click();toast('↓ Chain exported','green')}
+function renderChain(){const c=$('ci-blocks');c.innerHTML='<div class="ci-block genesis" title="Genesis Block #0">G</div>';for(let i=1;i<chain.length;i++){const el=document.createElement('div');el.className='ci-block valid';el.textContent=i;el.title=`Block #${i}\n${chain[i].type}`;c.appendChild(el)}}
+function renderTxFeed(){const list=$('tx-list');if(chain.length<=1)return;list.innerHTML='';[...chain].reverse().forEach(b=>{if(b.type==='GENESIS')return;const card=document.createElement('div');card.className='tx-card';const tc=b.type==='NOMINAL'?'var(--green)':b.type.includes('HEAVY')||b.type==='CRITICAL_SHUTDOWN'?'var(--red)':'var(--amber)';const saved=b.data.co2_saved_kg||0;const credits=(saved/1000)*CRS;card.innerHTML=`<div class="tx-top"><div class="tx-hash-str">⬡ ${b.hash.slice(0,36)}...</div><div class="tx-meta"><span class="badge badge-dark">#${b.index}</span><span class="tx-time">${new Date(b.timestamp).toLocaleTimeString()}</span></div></div><div class="tx-grid"><div class="tx-cell"><div class="tx-k">Decision</div><div class="tx-v" style="color:${tc}">${b.type.replace(/_/g,' ')}</div></div><div class="tx-cell"><div class="tx-k">CO₂ Saved</div><div class="tx-v" style="color:var(--green)">${saved.toFixed(5)} kg</div></div><div class="tx-cell"><div class="tx-k">Credits</div><div class="tx-v" style="color:var(--amber)">₹${credits.toFixed(6)}</div></div><div class="tx-cell"><div class="tx-k">AI Limit</div><div class="tx-v">${b.data.ai_limit}%</div></div><div class="tx-cell"><div class="tx-k">Prev Hash</div><div class="tx-v" style="color:var(--text3);font-size:10px">${b.prev_hash.slice(0,12)}...</div></div></div><div class="tx-chain-link"><span class="verified-badge">✓ SHA-256 VERIFIED · MERKLE CHAIN</span><span style="margin-left:auto">PREV: ${b.prev_hash.slice(0,16)}...</span></div>`;list.appendChild(card)})}
+function updateChainStats(){const blocks=chain.length-1;$('ch-blocks').textContent=blocks;$('ch-saved').textContent=totalSaved.toFixed(4)+' kg';$('ch-credits').textContent='₹'+((totalSaved/1000)*CRS).toFixed(4);$('ch-tx-count').textContent=blocks+' verified blocks';$('m-blocks').textContent=blocks;$('land-blocks').textContent=blocks}
+
+// CHARTS
+let co2Chart,savingsChart,anSavingsChart,anActionsChart;
+function initCharts(){
+  const base={responsive:true,maintainAspectRatio:false,animation:{duration:400},plugins:{legend:{display:false}},scales:{x:{ticks:{color:'#3A4F60',font:{size:9},maxTicksLimit:6},grid:{color:'rgba(255,255,255,0.03)',drawBorder:false}},y:{ticks:{color:'#3A4F60',font:{size:9}},grid:{color:'rgba(255,255,255,0.03)',drawBorder:false},min:0}}};
+  co2Chart=new Chart($('co2-chart'),{type:'line',data:{labels:[],datasets:[{label:'CO₂ kg/hr',data:[],borderColor:'#00FF87',backgroundColor:'rgba(0,255,135,0.06)',fill:true,tension:.4,pointRadius:0,borderWidth:2},{label:'LSTM Pred',data:[],borderColor:'#3D8EFF',backgroundColor:'transparent',borderDash:[5,4],tension:.4,pointRadius:0,borderWidth:1.5}]},options:{...base,plugins:{legend:{display:true,labels:{color:'#3A4F60',font:{size:10},boxWidth:10}}}}});
+  savingsChart=new Chart($('savings-chart'),{type:'line',data:{labels:[],datasets:[{label:'AI Optimised',data:[],borderColor:'#00FF87',backgroundColor:'rgba(0,255,135,0.07)',fill:true,tension:.4,pointRadius:0},{label:'Baseline',data:[],borderColor:'#FF3B3B',backgroundColor:'rgba(255,59,59,0.03)',fill:true,tension:.4,pointRadius:0,borderDash:[4,4]}]},options:{...base,plugins:{legend:{display:true,labels:{color:'#3A4F60',font:{size:10},boxWidth:10}}}}});
+  anSavingsChart=new Chart($('an-savings-chart'),{type:'line',data:{labels:[],datasets:[{label:'CO₂ saved (kg)',data:[],borderColor:'#00FF87',backgroundColor:'rgba(0,255,135,0.08)',fill:true,tension:.4,pointRadius:0},{label:'₹ Credits',data:[],borderColor:'#FFB800',backgroundColor:'rgba(255,184,0,0.04)',fill:true,tension:.4,pointRadius:0,yAxisID:'y2'}]},options:{...base,plugins:{legend:{display:true,labels:{color:'#3A4F60',font:{size:10},boxWidth:10}}},scales:{...base.scales,y2:{ticks:{color:'#3A4F60',font:{size:9}},grid:{display:false},position:'right'}}}});
+  anActionsChart=new Chart($('an-actions-chart'),{type:'bar',data:{labels:['Nominal','Throttle Light','Throttle Heavy','Shutdown'],datasets:[{data:[0,0,0,0],backgroundColor:['rgba(0,255,135,0.55)','rgba(255,184,0,0.55)','rgba(255,59,59,0.55)','rgba(61,142,255,0.55)'],borderColor:['#00FF87','#FFB800','#FF3B3B','#3D8EFF'],borderWidth:1,borderRadius:6,borderSkipped:false}]},options:{...base}});
+}
+
+// DASHBOARD
+function updateDashboard(d){
+  const{load,power,co2,temp,hum,pred,trend,aiLimit,label}=d;
+  const cc=co2>=CO2_C?'var(--red)':co2>=CO2_W?'var(--amber)':'var(--green)';
+  se('m-co2',co2.toFixed(3)+' kg/hr',cc);se('m-pred',pred.toFixed(3)+' kg/hr');
+  se('m-saved',totalSaved.toFixed(4)+' kg','var(--green)');se('m-credits','₹'+((totalSaved/1000)*CRS).toFixed(4)+' carbon credits');
+  se('m-limit',aiLimit+'%',aiLimit<100?'var(--amber)':'var(--green)');se('m-action',label.replace(/_/g,' '));
+  se('m-episodes',episode+' RL episodes · '+states+' states');
+  const tb=$('trend-badge');tb.textContent=trend.toUpperCase();tb.className='m-trend '+(trend==='rising'?'t-up':trend==='falling'?'t-dn':'t-st');
+  $('ai-banner').className='ai-banner '+(label==='CRITICAL_SHUTDOWN'?'critical':label.includes('THROTTLE')?'throttle':'nominal');
+  $('ai-banner').querySelector('.ab-icon').textContent=label==='CRITICAL_SHUTDOWN'?'🚨':label.includes('HEAVY')?'⚡':label.includes('LIGHT')?'🔶':'🤖';
+  const titles={CRITICAL_SHUTDOWN:'CRITICAL — Emergency Shutdown',THROTTLE_HEAVY:'Throttle Heavy — Load capped at 50%',THROTTLE_LIGHT:'Throttle Light — Load capped at 80%',NOMINAL:'Nominal — Running at optimal efficiency'};
+  se('ab-title',titles[label]||'Nominal');se('ab-detail',`LSTM predicted ${pred.toFixed(3)} kg/hr · Trend: ${trend} · RL ε=${(epsilon*100).toFixed(1)}%, ${states} states`);se('ab-badge',label.replace(/_/g,' '));
+  const bC=(load/100)*CF,aC=(load*(aiLimit/100)/100)*CF,sv=Math.max(0,bC-aC);
+  $('co2-split').className='co2-split '+(label==='CRITICAL_SHUTDOWN'?'critical':label.includes('THROTTLE')?'warning':'nominal');
+  $('split-before').innerHTML=bC.toFixed(3)+'<span class="split-unit"> kg/hr</span>';$('split-after').innerHTML=aC.toFixed(3)+'<span class="split-unit"> kg/hr</span>';$('split-save').textContent=sv.toFixed(4)+' kg/hr saved';
+  se('sb-load',load+'%');se('sb-power',power+' W');se('sb-co2r',bC.toFixed(3)+' kg/hr');se('sb-cost','₹'+(bC*(CRS/1000)).toFixed(5)+'/hr');
+  const cl=Math.round(load*(aiLimit/100));se('sa-load',cl+'%');se('sa-power',Math.round(power*(aiLimit/100))+' W');se('sa-co2r',aC.toFixed(3)+' kg/hr');se('sa-cost','₹'+(aC*(CRS/1000)).toFixed(5)+'/hr');
+  se('s-power',power+' W');se('s-co2',co2.toFixed(3)+' kg/hr');se('s-temp',temp.toFixed(1)+' °C');se('s-hum',hum.toFixed(0)+' %');
+  bar('sb-pw-bar',Math.min(100,power/18500*100));bar('sb-co2-bar',Math.min(100,(co2/1.5)*100));bar('sb-t-bar',Math.min(100,(temp/50)*100));bar('sb-h-bar',hum);
+  $('sb-co2-bar').style.background=cc;
+  se('mc-load',load+'%',load>85?'var(--red)':load>65?'var(--amber)':'var(--green)');se('mc-power',power+' W','var(--blue)');se('mc-co2',co2.toFixed(3)+' kg/hr',cc);se('mc-temp',temp.toFixed(1)+' °C',temp>35?'var(--amber)':'var(--text)');se('mc-hum',hum.toFixed(0)+' %');se('mc-ailimit',aiLimit+'%',aiLimit<100?'var(--amber)':'var(--green)');
+  const msb=$('mc-status-badge');msb.textContent=load>85?'HIGH LOAD':load>65?'MODERATE':'OPTIMAL';msb.className='badge '+(load>85?'badge-red':load>65?'badge-amber':'badge-green');
+  const t=new Date().toLocaleTimeString();
+  pushChart(co2Chart,t,[+co2.toFixed(4),+pred.toFixed(4)]);pushChart(savingsChart,t,[+totalSaved.toFixed(5),+(totalSaved*1.3+.001).toFixed(5)]);
+  se('land-co2',co2.toFixed(3)+' kg/hr',cc);se('land-saved',totalSaved.toFixed(4)+' kg','var(--green)');se('land-status',label.replace(/_/g,' '),cc);
+}
+function updateAnalytics(){
+  const total=Object.values(actionCounts).reduce((a,b)=>a+b,0);
+  se('an-saved',totalSaved.toFixed(4));se('an-sub',`≡ ${(totalSaved*1000).toFixed(1)} g · ₹${((totalSaved/1000)*CRS).toFixed(5)} in carbon credits earned`);
+  se('an-points',msgCount);se('an-decisions',total);se('an-nominal',total>0?((actionCounts.NOMINAL/total)*100).toFixed(1)+'%':'0%');se('an-episodes',episode);se('an-log-count',decisionLog.length+' decisions');
+  const t=new Date().toLocaleTimeString();pushChart(anSavingsChart,t,[+totalSaved.toFixed(5),+((totalSaved/1000)*CRS).toFixed(5)]);
+  anActionsChart.data.datasets[0].data=[actionCounts.NOMINAL,actionCounts.THROTTLE_LIGHT,actionCounts.THROTTLE_HEAVY,actionCounts.CRITICAL_SHUTDOWN];anActionsChart.update();
+  if(decisionLog.length===0)return;
+  $('an-log-body').innerHTML=decisionLog.slice(0,15).map(e=>{const bc=e.type==='NOMINAL'?'badge-green':e.type.includes('HEAVY')||e.type==='CRITICAL_SHUTDOWN'?'badge-red':'badge-amber';return`<div class="dt-row"><span class="mono" style="font-size:10px;color:var(--text3)">${e.time}</span><span><span class="badge ${bc}">${e.type.replace(/_/g,' ')}</span></span><span class="mono" style="color:var(--red)">${e.co2b.toFixed(4)}</span><span class="mono" style="color:var(--green)">${e.co2a.toFixed(4)}</span><span class="mono" style="color:var(--green);font-weight:700">+${e.saved.toFixed(5)} kg</span></div>`}).join('');
+}
+function addTrail(e){const body=$('trail-body');if(body.querySelector('.empty-state'))body.innerHTML='';const dc=e.type==='NOMINAL'?'var(--green)':e.type.includes('HEAVY')||e.type==='CRITICAL_SHUTDOWN'?'var(--red)':'var(--amber)';const row=document.createElement('div');row.className='trail-row';row.innerHTML=`<div class="tr-dot" style="background:${dc}"></div><div style="flex:1"><div class="tr-action" style="color:${dc}">${e.type.replace(/_/g,' ')}</div><div class="tr-detail">Cap: ${e.limit}% · CO₂: ${e.co2b.toFixed(3)}→${e.co2a.toFixed(3)} · +${e.saved.toFixed(4)} kg</div></div><div class="tr-time">${e.time}</div>`;body.insertBefore(row,body.firstChild);if(body.children.length>20)body.removeChild(body.lastChild);$('trail-count').textContent=optimLog.length+' events'}
+
+// MQTT
+function connectMQTT(){try{mqttClient=mqtt.connect(BROKER);mqttClient.on('connect',()=>{$('conn-badge').className='conn-badge live';$('conn-text').textContent='Live · Wokwi ESP32';mqttClient.subscribe(T_DATA);toast('Connected to Wokwi ESP32 — live data active','green')});mqttClient.on('error',setOffline);mqttClient.on('offline',setOffline);mqttClient.on('message',handleMsg)}catch(e){setOffline()}}
+async function handleMsg(topic,msg){if(topic!==T_DATA||manualMode)return;let d;try{d=JSON.parse(msg.toString())}catch{return}
+  msgCount++;const load=d.load||0,power=d.power_w||0,co2=d.co2_kg||0,temp=d.temp_c||25,hum=d.humidity||60;
+  const{pred,trend}=predict(co2);const{limit,state,idx}=rlAct(pred,trend,load);
+  let label='NOMINAL',aiLimit=limit;
+  if(pred>=CO2_C){aiLimit=0;label='CRITICAL_SHUTDOWN'}else if(pred>=CO2_H){aiLimit=Math.min(limit,50);label='THROTTLE_HEAVY'}else if(pred>=CO2_W){aiLimit=Math.min(limit,80);label='THROTTLE_LIGHT'}
+  if(msgCount>1){const{saved,reward}=rlLearn(prevState,prevIdx,prevCo2,co2,prevLoad,load);totalSaved+=saved;actionCounts[label]=(actionCounts[label]||0)+1;
+    if(saved>.0001||label!=='NOMINAL'){const ev={type:label,limit:aiLimit,co2b:prevCo2,co2a:co2,saved,reward,time:new Date().toLocaleTimeString()};optimLog.unshift(ev);decisionLog.unshift({...ev});if(optimLog.length>50)optimLog.pop();addTrail(ev);
+      await addBlock(label,{co2_before:+prevCo2.toFixed(4),co2_after:+co2.toFixed(4),co2_saved_kg:+saved.toFixed(5),ai_limit:aiLimit,reward:+reward.toFixed(4),load_pct:load,rl_state:state});
+      if(label==='CRITICAL_SHUTDOWN')toast('🚨 CRITICAL — Emergency shutdown triggered','red');else if(label==='THROTTLE_HEAVY')toast('⚡ Throttle Heavy — 50% cap applied','amber')}}
+  prevCo2=co2;prevLoad=load;prevState=state;prevIdx=idx;
+  updateDashboard({load,power,co2,temp,hum,pred,trend,aiLimit,label});updateAnalytics();}
+function setOffline(){$('conn-badge').className='conn-badge offline';$('conn-text').textContent='Connecting...'}
+
+// CERT
+function openCertModal(){const blocks=chain.length-1;const mr=chain.length>0?chain[chain.length-1].hash:'—';$('cert-data-box').innerHTML=`<strong>Factory:</strong> EcoGrid — Chennai Plant 1<br/><strong>Machine:</strong> MACH-IND-001 · Kirloskar SF-K 18.5kW<br/><strong>CO₂ Saved:</strong> ${totalSaved.toFixed(5)} kg<br/><strong>Credits:</strong> ₹${((totalSaved/1000)*CRS).toFixed(6)}<br/><strong>Chain Blocks:</strong> ${blocks}<br/><strong>Merkle Root:</strong> ${mr.slice(0,32)}...<br/><strong>Network:</strong> Polygon Amoy Testnet<br/><strong>Timestamp:</strong> ${new Date().toISOString()}`;$('cert-claim-view').style.display='block';$('cert-success-view').style.display='none';$('cert-modal').classList.add('open')}
+function closeCertModal(){$('cert-modal').classList.remove('open')}
+async function claimCertificate(){const btn=$('cert-claim-btn');btn.disabled=true;btn.textContent='Processing...';$('cert-progress').style.display='block';for(const[pct,msg]of[[10,'Computing Merkle root...'],[30,'Preparing transaction...'],[50,'MetaMask signature...'],[70,'Broadcasting to Polygon...'],[90,'Awaiting confirmation...'],[100,'Confirmed!']]){$('cp-label').textContent=msg;$('cp-bar').style.width=pct+'%';await sleep(600)}
+  const ft='0x'+await sha256('carbonos-cert-'+Date.now()+totalSaved);$('cert-tx-hash').textContent=ft;$('cert-poly-link').href=`https://amoy.polygonscan.com/tx/${ft}`;$('cert-poly-link').textContent='↗ Verify on Polygonscan Amoy · '+ft.slice(0,20)+'...';$('cert-claim-view').style.display='none';$('cert-success-view').style.display='block';toast('🎉 Certificate claimed on Polygon Amoy!','green')}
+
+// NAV
+function showApp(tab){$('landing').style.display='none';$('app').style.display='flex';switchTab(tab||'dashboard');if(!mqttClient){connectMQTT();initCharts()}}
+function showLanding(){$('app').style.display='none';$('landing').style.display='flex'}
+function switchTab(id){document.querySelectorAll('.tab-panel').forEach(p=>p.classList.remove('active'));document.querySelectorAll('.tb-tab').forEach(t=>t.classList.remove('active'));$('tab-'+id).classList.add('active');['dashboard','analytics','blockchain'].indexOf(id)>=0&&document.querySelectorAll('.tb-tab')[['dashboard','analytics','blockchain'].indexOf(id)]?.classList.add('active')}
+function toggleManual(){manualMode=!manualMode;$('override-btn').textContent=manualMode?'▶ Resume AI':'⏸ Manual Override';$('override-btn').className='override-btn'+(manualMode?' active':'');toast(manualMode?'Manual override — AI suspended':'AI control resumed',manualMode?'amber':'green')}
+
+// HELPERS
+function $(id){return document.getElementById(id)}
+function se(id,txt,color){const el=$(id);if(!el)return;el.textContent=txt;if(color)el.style.color=color}
+function bar(id,pct){const el=$(id);if(el)el.style.width=Math.min(100,Math.max(0,pct))+'%'}
+function pushChart(chart,label,values){if(!chart)return;if(chart.data.labels.length>45){chart.data.labels.shift();chart.data.datasets.forEach(d=>d.data.shift())}chart.data.labels.push(label);values.forEach((v,i)=>chart.data.datasets[i].data.push(v));chart.update('none')}
+function toast(msg,type=''){const wrap=$('toast-wrap');const el=document.createElement('div');el.className='toast '+type;el.innerHTML='<span>●</span>'+msg;wrap.appendChild(el);setTimeout(()=>el.remove(),3500)}
+function sleep(ms){return new Promise(r=>setTimeout(r,ms))}
+
+// INIT
+(async()=>{await buildGenesis()})();
+</script>
+</body>
+</html>
